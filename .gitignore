@@ -1,0 +1,7 @@
+bin
+loop*
+.kubeconfig
+
+# editor specific files
+.idea
+.vscode
