@@ -1,14 +1,12 @@
-FROM golang:1.19-alpine as builder
-RUN apk add make binutils git
-COPY / /work
-WORKDIR /work
-RUN make lvmplugin
 
-FROM alpine:3.16
-LABEL maintainers="Metal Authors"
-LABEL description="LVM Driver"
+FROM docker.io/pureflash/pureflash-k8s:1.8.3
+LABEL maintainers="LiuLele"
+LABEL description="PureFlash pfbd CSI Driver"
 
-RUN apk add lvm2 lvm2-extra e2fsprogs e2fsprogs-extra smartmontools nvme-cli util-linux device-mapper xfsprogs xfsprogs-extra
-COPY --from=builder /work/bin/lvmplugin /lvmplugin
+
+COPY bin/pureflash_csi /opt/pureflash/pureflash_csi
+COPY start-csi-node.sh /opt/pureflash/start-csi-node.sh
+COPY pfkd_helper /usr/bin/pfkd_helper
+#COPY modules /lib/modules
 USER root
-ENTRYPOINT ["/lvmplugin"]
+ENTRYPOINT ["/opt/pureflash/start-csi-node.sh"]

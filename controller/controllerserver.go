@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2023 LiuLele
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,9 +24,6 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	v1 "k8s.io/api/core/v1"
-	k8serror "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
@@ -36,17 +33,13 @@ import (
 type controllerServer struct {
 	caps             []*csi.ControllerServiceCapability
 	nodeID           string
-	devicesPattern   string
-	vgName           string
 	hostWritePath    string
 	kubeClient       kubernetes.Clientset
-	provisionerImage string
-	pullPolicy       v1.PullPolicy
 	namespace        string
 }
 
 // NewControllerServer
-func newControllerServer(ephemeral bool, nodeID string, devicesPattern string, vgName string, hostWritePath string, namespace string, provisionerImage string, pullPolicy v1.PullPolicy) (*controllerServer, error) {
+func newControllerServer(ephemeral bool, nodeID string,  hostWritePath string, namespace string) (*controllerServer, error) {
 	if ephemeral {
 		return &controllerServer{caps: getControllerServiceCapabilities(nil), nodeID: nodeID}, nil
 	}
@@ -64,20 +57,18 @@ func newControllerServer(ephemeral bool, nodeID string, devicesPattern string, v
 		caps: getControllerServiceCapabilities(
 			[]csi.ControllerServiceCapability_RPC_Type{
 				csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
+				//csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
 				// TODO
-				//				csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
+								csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
 				//				csi.ControllerServiceCapability_RPC_LIST_SNAPSHOTS,
 				//				csi.ControllerServiceCapability_RPC_CLONE_VOLUME,
 				//				csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
 			}),
 		nodeID:           nodeID,
-		devicesPattern:   devicesPattern,
 		hostWritePath:    hostWritePath,
-		vgName:           vgName,
 		kubeClient:       *kubeClient,
 		namespace:        namespace,
-		provisionerImage: provisionerImage,
-		pullPolicy:       pullPolicy,
+
 	}, nil
 }
 
@@ -125,12 +116,7 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 
 	volumeContext["RequiredBytes"] = size
 
-	// schedulded node of the pod is the first entry in the preferred segment
-	node := req.GetAccessibilityRequirements().GetPreferred()[0].GetSegments()[topologyKeyNode]
-	topology := []*csi.Topology{{
-		Segments: map[string]string{topologyKeyNode: node},
-	}}
-	klog.Infof("creating volume %s on node: %s", req.GetName(), node)
+
 
 	if _, err := osexec.Command("/opt/pureflash/pfcli", "create_volume", "-v", req.GetName(),  "-s",
 		size,  "--rep", strconv.Itoa(repCount) ).Output(); err != nil {
@@ -145,7 +131,6 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 			CapacityBytes:      req.GetCapacityRange().GetRequiredBytes(),
 			VolumeContext:      volumeContext,
 			ContentSource:      req.GetVolumeContentSource(),
-			AccessibleTopology: topology,
 		},
 	}, nil
 }
@@ -163,42 +148,7 @@ func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 
 	volID := req.GetVolumeId()
 
-	volume, err := cs.kubeClient.CoreV1().PersistentVolumes().Get(ctx, volID, metav1.GetOptions{})
-	if err != nil {
-		panic(err.Error())
-	}
-	klog.V(4).Infof("volume %s to be deleted", volume)
-	ns := volume.Spec.NodeAffinity.Required.NodeSelectorTerms
-	node := ns[0].MatchExpressions[0].Values[0]
-
-	klog.V(4).Infof("from node %s ", node)
-
-	_, err = cs.kubeClient.CoreV1().Nodes().Get(ctx, node, metav1.GetOptions{})
-	if err != nil {
-		if k8serror.IsNotFound(err) {
-			klog.Infof("node %s not found anymore. Assuming volume %s is gone for good.", node, volID)
-			return &csi.DeleteVolumeResponse{}, nil
-		} else {
-			klog.Errorf("error getting nodes: %v", err)
-			return nil, err
-		}
-	}
-
-	va := volumeAction{
-		action:           actionTypeDelete,
-		name:             req.GetVolumeId(),
-		nodeName:         node,
-		pullPolicy:       cs.pullPolicy,
-		provisionerImage: cs.provisionerImage,
-		kubeClient:       cs.kubeClient,
-		namespace:        cs.namespace,
-		vgName:           cs.vgName,
-		hostWritePath:    cs.hostWritePath,
-	}
-	if err := createProvisionerPod(ctx, va); err != nil {
-		klog.Errorf("error creating provisioner pod :%v", err)
-		return nil, err
-	}
+	deletePfbdVolume(volID)
 
 	klog.V(4).Infof("volume %v successfully deleted", volID)
 

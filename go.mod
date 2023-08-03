@@ -4,13 +4,10 @@ go 1.19
 
 require (
 	github.com/container-storage-interface/spec v1.7.0
-	github.com/docker/go-units v0.5.0
 	github.com/kubernetes-csi/csi-lib-utils v0.12.0
 	golang.org/x/net v0.5.0
 	golang.org/x/sys v0.4.0
 	google.golang.org/grpc v1.53.0
-	k8s.io/api v0.26.0
-	k8s.io/apimachinery v0.26.0
 	k8s.io/client-go v0.26.0
 	k8s.io/klog/v2 v2.80.1
 )
@@ -43,6 +40,8 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	k8s.io/api v0.26.0 // indirect
+	k8s.io/apimachinery v0.26.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20230118215034-64b6bb138190 // indirect
 	k8s.io/utils v0.0.0-20230115233650-391b47cb4029 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
