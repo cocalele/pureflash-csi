@@ -1,0 +1,80 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: pfs-hs
+  namespace: pureflash
+  labels:
+    app: pfs
+spec:
+  ports:
+  - port: 49162
+    name: data
+  - port: 49160
+    name: server-rdma
+  - port: 49181
+    name: control
+  clusterIP: None
+  selector:
+    app: pfs
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: pfs
+  namespace: pureflash
+spec:
+  selector:
+    matchLabels:
+      app: pfs
+  #serviceName: pfs-hs
+  #replicas: 3
+  template:
+    metadata:
+      labels:
+        app: pfs
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+      - name: pfs
+        imagePullPolicy: IfNotPresent
+        image: "docker.io/pureflash/pureflash-k8s:1.8.3"
+        resources:
+          requests:
+            #memory: "20Gi"
+            #cpu: "12"
+            memory: "1Gi"
+            cpu: "0.5"
+        ports:
+        - containerPort: 49162
+          name: data
+        - containerPort: 49160
+          name: server-rdma
+        - containerPort: 49181
+          name: control
+        command:
+        - sh
+        - -c
+        - "/opt/pureflash/start-pfs.sh"
+        securityContext:
+          privileged: true
+        env:
+          - name: PFS_DISKS
+            value: "/dev/loop5"
+          - name: MY_NODE_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.hostIP
+        securityContext:
+          privileged: true
+          #runAsUser: 1000
+          #fsGroup: 1000
+        #volumeMounts:
+        #- name: fakedisk
+        #  mountPath: /dev/nvme1n1
+      #volumes:
+      #- name: fakedisk
+      #  hostPath:
+      #    # first run: /opt/pureflash/mariadb && chmod -R 777 /opt/pureflash
+      #    path: /opt/pureflash/disk.dat
+      #    type: File

@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: pfc-hs
+  namespace: pureflash
+  labels:
+    app: pfc
+spec:
+  ports:
+  - port: 49180
+    name: server
+  clusterIP: None
+  selector:
+    app: pfc
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pfc-pdb
+  namespace: pureflash
+spec:
+  selector:
+    matchLabels:
+      app: pfc
+  maxUnavailable: 1
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: pfc
+  namespace: pureflash
+spec:
+  selector:
+    matchLabels:
+      app: pfc
+  serviceName: pfc-hs
+  replicas: 3
+  updateStrategy:
+    type: RollingUpdate
+  podManagementPolicy: OrderedReady
+  template:
+    metadata:
+      labels:
+        app: pfc
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: "app"
+                    operator: In
+                    values:
+                    - pfc
+              topologyKey: "kubernetes.io/hostname"
+      containers:
+      - name: pfc
+        imagePullPolicy: IfNotPresent
+        image: "docker.io/pureflash/pureflash-k8s:1.8.3"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "0.5"
+        ports:
+        - containerPort: 49180
+          name: client
+        command:
+        - sh
+        - -c
+        - "/opt/pureflash/start-pfc.sh"
+        env:
+          - name: HELLO_WORLD
+            value: just a demo
+          - name: MY_NODE_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.hostIP
+      #securityContext:
+      #  runAsUser: 1000
+      #  fsGroup: 1000

@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: pfsdb-cs
+  namespace: pureflash
+  labels:
+    app: pfsdb
+spec:
+  ports:
+  - port: 3306
+    name: client
+  selector:
+    app: pfsdb
+#---
+#apiVersion: policy/v1
+#kind: PodDisruptionBudget
+#metadata:
+#  name: pfsdb-pdb
+#  namespace: pureflash
+#spec:
+#  selector:
+#    matchLabels:
+#      app: pfsdb
+#  maxUnavailable: 1
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: pfsdb
+  namespace: pureflash
+spec:
+  selector:
+    matchLabels:
+      app: pfsdb
+  serviceName: pfsdb-cs
+  replicas: 1
+  updateStrategy:
+    type: RollingUpdate
+  podManagementPolicy: OrderedReady
+  template:
+    metadata:
+      labels:
+        app: pfsdb
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: "app"
+                    operator: In
+                    values:
+                    - pfsdb
+              topologyKey: "kubernetes.io/hostname"
+      containers:
+      - name: pfs-metadb
+        imagePullPolicy: IfNotPresent
+        image: "docker.io/pureflash/pureflash-k8s:1.8.3"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "0.5"
+        ports:
+        - containerPort: 3306
+          name: client
+        command:
+        - sh
+        - -c
+        - "/opt/pureflash/start-db.sh"
+        volumeMounts:
+        - name: datadir
+          mountPath: /var/lib/mysql
+      #securityContext:
+      #  runAsUser: 101
+      #  fsGroup: 102
+      volumes:
+      - name: datadir
+        hostPath:
+          # first run: /opt/pureflash/mariadb && chmod -R 777 /opt/pureflash
+          path: /opt/pureflash/mariadb
+          type: DirectoryOrCreate
+  #volumeClaimTemplates:
+  #- metadata:
+  #    name: datadir
+  #  spec:
+  #    accessModes: [ "ReadWriteOnce" ]
+  #    storageClassName: local-storage
+  #    resources:
+  #      requests:
+  #        storage: 100Gi
