@@ -92,7 +92,7 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 
 	if req.GetVolumeCapability().GetBlock() != nil {
 
-		output, err := bindMountPfbd(req., targetPath)
+		output, err := bindMountPfbd(req.VolumeId, targetPath)
 		if err != nil {
 			return nil, fmt.Errorf("unable to bind mount lv: %w output:%s", err, output)
 		}
@@ -290,7 +290,7 @@ func getPfbdDevName(volumeName string) (string,error) {
 
 	cmdStr := "set -o pipefail; pfkd_helper -l | grep '%s' | awk '{print $1}'"
 	if devName, err := exec.Command("bash", "-c", cmdStr).Output(); err != nil {
-		return "", fmt.Errorf("volume:%s not attached", volumeName)
+		return "", fmt.Errorf("volume:%s not attached, error:%s", volumeName, err.Error())
 	} else {
 		return string(devName), nil
 	}
@@ -299,8 +299,8 @@ func attachPfbd(volumeName string) (string, error){
 	var devPath string
 	if devName, err := getPfbdDevName(volumeName); err != nil {
 		klog.Infof("Not found volume:%s, try to attach it", volumeName)
-		if _, err := exec.Command("bash", "-c", "pfkd_helper -a "+volumeName).Output();err != nil {
-			klog.Errorf("Failed to attach volume:%s", volumeName)
+		if outstr, err := exec.Command("bash", "-c", "pfkd_helper -a -v "+volumeName).CombinedOutput();err != nil {
+			klog.Errorf("Failed to attach volume:%s, %s\n (%s)", volumeName, err.Error(), outstr)
 			return "", fmt.Errorf("failed to attach volume:%s", volumeName)
 		}
 
@@ -320,12 +320,15 @@ func attachPfbd(volumeName string) (string, error){
 	return devPath, nil
 }
 func mountPfbd(volumeName, mountPath string, fsType string) (string, error) {
-
+	klog.Infof("Try to mount pfbd volume:%s to %s", volumeName, mountPath)
 
 	devPath, err := attachPfbd(volumeName)
 	if err != nil {
+		klog.Errorf("Failed to attach volume:%s", volumeName)
 		return "", err
 	}
+	klog.Infof("Device path of volume:%s is %s", volumeName, devPath)
+
 	formatted := false
 	forceFormat := false
 	if fsType == "" {
@@ -410,9 +413,15 @@ func umountPfbd(targetPath string) {
 }
 
 
-func bindMountPfbd(devPath, mountPath string) (string, error) {
+func bindMountPfbd(volumeName, mountPath string) (string, error) {
+	klog.Infof("Try to bind mount pfbd volume:%s to %s", volumeName, mountPath)
+	devPath, err := attachPfbd(volumeName)
+	if err != nil {
+		klog.Errorf("Failed to attach volume:%s", volumeName)
+	}
+	klog.Infof("Device path of volume:%s is %s", volumeName, devPath)
 
-	_, err := os.Create(mountPath)
+	_, err = os.Create(mountPath)
 	if err != nil {
 		return "", fmt.Errorf("unable to create mount directory for lv:%s err:%w", devPath, err)
 	}
