@@ -94,19 +94,19 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 
 		output, err := bindMountPfbd(req.VolumeId, targetPath)
 		if err != nil {
-			return nil, fmt.Errorf("unable to bind mount lv: %w output:%s", err, output)
+			return nil, fmt.Errorf("unable to bind mount dev: %w output:%s", err, output)
 		}
 		// FIXME: VolumeCapability is a struct and not the size
-		klog.Infof("block lv %s size:%s created at:%s", req.GetVolumeId(), req.GetVolumeCapability(),  targetPath)
+		klog.Infof("block dev %s size:%s created at:%s", req.GetVolumeId(), req.GetVolumeCapability(),  targetPath)
 
 	} else if req.GetVolumeCapability().GetMount() != nil {
 
 		output, err := mountPfbd(req.VolumeId, targetPath, req.GetVolumeCapability().GetMount().GetFsType())
 		if err != nil {
-			return nil, fmt.Errorf("unable to mount lv: %w output:%s", err, output)
+			return nil, fmt.Errorf("unable to mount dev: %w output:%s", err, output)
 		}
 		// FIXME: VolumeCapability is a struct and not the size
-		klog.Infof("mounted lv %s size:%s created at:%s", req.GetVolumeId(), req.GetVolumeCapability(), targetPath)
+		klog.Infof("mounted dev %s size:%s created at:%s", req.GetVolumeId(), req.GetVolumeCapability(), targetPath)
 
 	}
 
@@ -288,11 +288,11 @@ func (ns *nodeServer) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandV
 
 func getPfbdDevName(volumeName string) (string,error) {
 
-	cmdStr := "set -o pipefail; pfkd_helper -l | grep '%s' | awk '{print $1}'"
+	cmdStr := fmt.Sprintf("set -o pipefail; pfkd_helper -l | grep '%s' | awk '{print $1}'", volumeName)
 	if devName, err := exec.Command("bash", "-c", cmdStr).Output(); err != nil {
 		return "", fmt.Errorf("volume:%s not attached, error:%s", volumeName, err.Error())
 	} else {
-		return string(devName), nil
+		return strings.Trim(string(devName), "\n"), nil
 	}
 }
 func attachPfbd(volumeName string) (string, error){
@@ -364,13 +364,14 @@ func mountPfbd(volumeName, mountPath string, fsType string) (string, error) {
 		cmd = exec.Command(fmt.Sprintf("mkfs.%s", fsType), formatArgs...) //nolint:gosec
 		out, err = cmd.CombinedOutput()
 		if err != nil {
-			return string(out), fmt.Errorf("unable to format lv:%s err:%w", devPath, err)
+			klog.Infof("unable to format device:%s err:%w, :%s", devPath, err, string(out))
+			return string(out), fmt.Errorf("unable to format dev:%s err:%w", devPath, err)
 		}
 	}
 
 	err = os.MkdirAll(mountPath, 0777|os.ModeSetgid)
 	if err != nil {
-		return string(out), fmt.Errorf("unable to create mount directory for lv:%s err:%w", devPath, err)
+		return string(out), fmt.Errorf("unable to create mount directory for dev:%s err:%w", devPath, err)
 	}
 
 	// --make-shared is required that this mount is visible outside this container.
@@ -423,7 +424,7 @@ func bindMountPfbd(volumeName, mountPath string) (string, error) {
 
 	_, err = os.Create(mountPath)
 	if err != nil {
-		return "", fmt.Errorf("unable to create mount directory for lv:%s err:%w", devPath, err)
+		return "", fmt.Errorf("unable to create mount directory for dev:%s err:%w", devPath, err)
 	}
 
 	// --make-shared is required that this mount is visible outside this container.

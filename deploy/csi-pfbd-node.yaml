@@ -118,6 +118,9 @@ spec:
               mountPropagation: "Bidirectional"
             - name: sysfs
               mountPath: /sys
+            - name: devfs
+              mountPath: /dev
+            #- name: modprobe
             #- name: modprobe
             #  mountPath: /usr/sbin/modprobe
           resources:
@@ -142,6 +145,10 @@ spec:
         - name: sysfs
           hostPath:
             path: /sys
+            type: Directory
+        - name: devfs
+          hostPath:
+            path: /dev
             type: Directory
         #- name: modprobe
         #  hostPath:
