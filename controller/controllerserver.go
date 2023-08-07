@@ -148,8 +148,8 @@ func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 
 	volID := req.GetVolumeId()
 
+	klog.Info("Delete volume:%s", volID)
 	deletePfbdVolume(volID)
-
 	klog.V(4).Infof("volume %v successfully deleted", volID)
 
 	return &csi.DeleteVolumeResponse{}, nil

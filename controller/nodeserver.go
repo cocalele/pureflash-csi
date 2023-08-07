@@ -153,6 +153,8 @@ func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
 		return nil, status.Error(codes.InvalidArgument, "Volume Capability missing in request")
 	}
 
+	klog.Infof("Stage volume:%s, do nothing here", req.GetVolumeId())
+	//attachPfbd(req.GetVolumeId())
 	return &csi.NodeStageVolumeResponse{}, nil
 }
 
@@ -164,6 +166,11 @@ func (ns *nodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 	}
 	if len(req.GetStagingTargetPath()) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Target path missing in request")
+	}
+
+	klog.Infof("Unstage volume:%s ...", req.GetVolumeId())
+	if err := detachPfbd(req.GetVolumeId()); err != nil {
+		return nil, err
 	}
 
 	return &csi.NodeUnstageVolumeResponse{}, nil
@@ -288,7 +295,7 @@ func (ns *nodeServer) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandV
 
 func getPfbdDevName(volumeName string) (string,error) {
 
-	cmdStr := fmt.Sprintf("set -o pipefail; pfkd_helper -l | grep '%s' | awk '{print $1}'", volumeName)
+	cmdStr := fmt.Sprintf("set -o pipefail; pfkd_helper -l | grep -w '%s' | awk '{print $1}'", volumeName)
 	if devName, err := exec.Command("bash", "-c", cmdStr).Output(); err != nil {
 		return "", fmt.Errorf("volume:%s not attached, error:%s", volumeName, err.Error())
 	} else {
@@ -299,7 +306,7 @@ func attachPfbd(volumeName string) (string, error){
 	var devPath string
 	if devName, err := getPfbdDevName(volumeName); err != nil {
 		klog.Infof("Not found volume:%s, try to attach it", volumeName)
-		if outstr, err := exec.Command("bash", "-c", "pfkd_helper -a -v "+volumeName).CombinedOutput();err != nil {
+		if outstr, err := exec.Command("bash", "-c", "pfkd_helper -a "+volumeName).CombinedOutput();err != nil {
 			klog.Errorf("Failed to attach volume:%s, %s\n (%s)", volumeName, err.Error(), outstr)
 			return "", fmt.Errorf("failed to attach volume:%s", volumeName)
 		}
@@ -398,8 +405,8 @@ func detachPfbd(volumeName string) error {
 
 
 	cmdStr := fmt.Sprintf("pfkd_helper -d %s", volumeName)
-	if _, err := exec.Command("bash", "-c", cmdStr).Output(); err != nil {
-		klog.Errorf("Failed to detach volume:%s error:%s", volumeName, err.Error())
+	if rst, err := exec.Command("bash", "-c", cmdStr).CombinedOutput(); err != nil {
+		klog.Errorf("Failed to detach volume:%s error:%s, %s", volumeName, err.Error(), rst)
 		return err
 	}
 	return nil
@@ -430,7 +437,7 @@ func bindMountPfbd(volumeName, mountPath string) (string, error) {
 	// --make-shared is required that this mount is visible outside this container.
 	// --bind is required for raw block volumes to make them visible inside the pod.
 	mountArgs := []string{"--make-shared", "--bind", devPath, mountPath}
-	klog.Infof("bindmountlv command: mount %s", mountArgs)
+	klog.Infof("bindmount command: mount %s", mountArgs)
 	cmd := exec.Command("mount", mountArgs...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -443,10 +450,14 @@ func bindMountPfbd(volumeName, mountPath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("unable to change permissions of volume mount %s err:%w", mountPath, err)
 	}
-	klog.Infof("bindmountlv output:%s", out)
+	klog.Infof("bindmount output:%s", out)
 	return "", nil
 }
+func deletePfbdVolume(volID string )error {
 
-func deletePfbdVolume(volName string){
-	klog.Errorf("deletePfbdVolume not impl")
+	if msg, err := exec.Command("/opt/pureflash/pfcli", "delete_volume", "-v", volID ).CombinedOutput(); err != nil {
+		klog.Errorf("ERROR to delete volume :%s, %w, %s", volID, err, msg)
+		return err
+	}
+	return nil
 }
