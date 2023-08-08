@@ -60,7 +60,7 @@ spec:
           privileged: true
         env:
           - name: PFS_DISKS
-            value: "/dev/loop5"
+            value: "/dev/nvme1n1,/dev/nvme2n1"
           - name: MY_NODE_IP
             valueFrom:
               fieldRef:
