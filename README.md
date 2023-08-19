@@ -44,8 +44,8 @@ apply the following yaml files:
 ```
 PureFlash CSI use native kernel driver as client interface. A kernel driver represent volume as standard block device in Linux so it is  compatible with all applications. Also it can achieve higher performance than iSCSI.
 
-Kernel drivers can be found under `modules/<kernel_version>` directory. more kernel version modules is continuously adding here.
-run command `insmod pfkd.ko` before you creating PV.
+Kernel drivers can be found under `modules` directory. more kernel version modules is continuously adding here.
+run command `insmod pfkd-$(uname -r).ko` before you creating PV.
 
 ## Create storage class to use PureFlash
 There's an exmaple in this project, 

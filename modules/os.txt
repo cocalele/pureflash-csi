@@ -1,4 +1,5 @@
 ko version                    |   OS release
 -------------------------------------------------------
+pfkd-5.4.0-150-generic.ko     |  Ubuntu 20.04.6 LTS
 pfkd-5.15.0-60-generic        |  Ubuntu 20.04.3 LTS
 pfkd-5.15.0-73-generic.ko     |  Ubuntu 22.04.2 LTS
